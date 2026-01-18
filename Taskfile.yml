@@ -1,0 +1,168 @@
+# Taskfile.yml — go-http-lab build/run automation
+# https://taskfile.dev
+#
+# Install: go install github.com/go-task/task/v3/cmd/task@latest
+# Usage: task <task-name>
+
+version: '3'
+
+vars:
+  SERVER_PORT: 8080
+  PPROF_PORT: 6060
+  GO_VERSION: 1.23.4
+
+env:
+  CGO_ENABLED: "0"
+
+tasks:
+  default:
+    desc: "List available tasks"
+    cmds:
+      - task --list
+
+  # ============================================
+  # Build
+  # ============================================
+  build:
+    desc: "Build all binaries"
+    deps: [build:server, build:slowloris, build:loadgen, build:connwatch]
+
+  build:server:
+    desc: "Build experiment server"
+    cmds:
+      - go build -o bin/server ./cmd/server
+    sources:
+      - cmd/server/**/*.go
+      - internal/**/*.go
+    generates:
+      - bin/server
+
+  build:slowloris:
+    desc: "Build slowloris client"
+    cmds:
+      - go build -o bin/slowloris ./cmd/slowloris
+    sources:
+      - cmd/slowloris/**/*.go
+      - internal/**/*.go
+    generates:
+      - bin/slowloris
+
+  build:loadgen:
+    desc: "Build load generator"
+    cmds:
+      - go build -o bin/loadgen ./cmd/loadgen
+    sources:
+      - cmd/loadgen/**/*.go
+      - internal/**/*.go
+    generates:
+      - bin/loadgen
+
+  build:connwatch:
+    desc: "Build connection watcher"
+    cmds:
+      - go build -o bin/connwatch ./cmd/connwatch
+    sources:
+      - cmd/connwatch/**/*.go
+      - internal/**/*.go
+    generates:
+      - bin/connwatch
+
+  # ============================================
+  # Run
+  # ============================================
+  run:server:
+    desc: "Run server (default settings)"
+    deps: [build:server]
+    cmds:
+      - ./bin/server -port={{.SERVER_PORT}} -pprof-port={{.PPROF_PORT}}
+
+  run:server:no-timeout:
+    desc: "Run server (no timeout - vulnerable mode)"
+    deps: [build:server]
+    cmds:
+      - ./bin/server -port={{.SERVER_PORT}} -pprof-port={{.PPROF_PORT}} -read-timeout=0 -write-timeout=0
+
+  run:slowloris:
+    desc: "Run slowloris attack simulation"
+    deps: [build:slowloris]
+    cmds:
+      - ./bin/slowloris -target=localhost:{{.SERVER_PORT}} -conns=100 -delay=1s
+
+  run:loadgen:
+    desc: "Run load test"
+    deps: [build:loadgen]
+    cmds:
+      - ./bin/loadgen -target=http://localhost:{{.SERVER_PORT}} -concurrency=10 -duration=30s
+
+  # ============================================
+  # Experiments
+  # ============================================
+  exp:slowloris:
+    desc: "Experiment: slowloris attack (timeout comparison)"
+    cmds:
+      - ./scripts/run_slowloris_exp.sh
+
+  exp:shutdown:
+    desc: "Experiment: graceful shutdown behavior"
+    cmds:
+      - ./scripts/run_shutdown_exp.sh
+
+  exp:keepalive:
+    desc: "Experiment: keep-alive on/off comparison"
+    cmds:
+      - ./scripts/run_keepalive_exp.sh
+
+  # ============================================
+  # Monitoring
+  # ============================================
+  watch:conns:
+    desc: "Watch TCP connection states"
+    cmds:
+      - watch -n 1 'ss -tanp | grep {{.SERVER_PORT}}'
+
+  watch:goroutines:
+    desc: "Watch server goroutine count"
+    cmds:
+      - watch -n 1 'curl -s localhost:{{.PPROF_PORT}}/debug/pprof/goroutine?debug=1 | head -1'
+
+  pprof:goroutine:
+    desc: "Collect goroutine profile"
+    cmds:
+      - curl -s "localhost:{{.PPROF_PORT}}/debug/pprof/goroutine?debug=2" > results/goroutine_$(date +%Y%m%d_%H%M%S).txt
+
+  pprof:heap:
+    desc: "Collect heap profile"
+    cmds:
+      - curl -s "localhost:{{.PPROF_PORT}}/debug/pprof/heap" > results/heap_$(date +%Y%m%d_%H%M%S).pb.gz
+
+  trace:collect:
+    desc: "Collect 10-second trace"
+    cmds:
+      - curl -s "localhost:{{.PPROF_PORT}}/debug/pprof/trace?seconds=10" > results/trace_$(date +%Y%m%d_%H%M%S).out
+
+  # ============================================
+  # Utilities
+  # ============================================
+  clean:
+    desc: "Clean build artifacts"
+    cmds:
+      - rm -rf bin/
+      - rm -f results/*.txt results/*.pb.gz results/*.out
+
+  test:
+    desc: "Run tests"
+    cmds:
+      - go test -v -race ./...
+
+  lint:
+    desc: "Run linter"
+    cmds:
+      - golangci-lint run ./...
+
+  env:
+    desc: "Print environment info"
+    cmds:
+      - go version
+      - uname -a
+      - ss --version
+      - which lsof
