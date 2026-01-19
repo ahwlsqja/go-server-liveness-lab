@@ -127,6 +127,7 @@ func main() {
 
 	// 서버 시작
 	log.Info().Msgf("listening on :%d", cfg.Port)
+	// ListenAndServer가 돌면서 Accept 블록킹 -> 즉 연결 마다 고루틴 만들어서 계쏙 도는 겅미 그러다가 ListenAndServe가 ErrServerClosed 반환하면  <- done 으로감
 	if err := server.ListenAndServe(); err != http.ErrServerClosed {
 		log.Fatal().Err(err).Msg("server error")
 	}
