@@ -136,7 +136,9 @@ func main() {
 	log.Info().Msg("server stopped")
 }
 
+// 프로그램 실행할 때 준 옵션들(예: -port=8080 -debug)을 읽어서 Config 구조체에 담아 돌려주는 함수
 func parseFlags() Config {
+	// Config 구조체를 만들고 모든 필드를 기본값(0, false, nil 등)으로 초기화
 	cfg := Config{}
 
 	flag.IntVar(&cfg.Port, "port", 8080, "main server port")
