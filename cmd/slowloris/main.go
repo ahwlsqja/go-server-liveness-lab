@@ -282,14 +282,15 @@ func statsReporter(ctx <-chan struct{}, interval time.Duration) {
 
 // printFinalStats는 최종 통계를 출력한다.
 func printFinalStats() {
-	fmt.Println("\n" + "="*60)
+	separator := "============================================================"
+	fmt.Println("\n" + separator)
 	fmt.Println("SLOWLORIS ATTACK SIMULATION RESULTS")
-	fmt.Println("="*60)
+	fmt.Println(separator)
 	fmt.Printf("Total connections attempted: %d\n", stats.totalConns.Load())
 	fmt.Printf("Connections closed by server: %d\n", stats.closedByServer.Load())
 	fmt.Printf("Connection errors: %d\n", stats.errors.Load())
 	fmt.Printf("Total headers sent: %d\n", stats.headersSent.Load())
-	fmt.Println("="*60)
+	fmt.Println(separator)
 
 	if stats.closedByServer.Load() > 0 {
 		fmt.Println("\n[ANALYSIS]")
