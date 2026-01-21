@@ -50,8 +50,9 @@ type Config struct {
 	IdleTimeout       time.Duration // keep-alive 유휴 대기
 
 	// 서버 동작 옵션
-	MaxHeaderBytes int
-	Debug          bool
+	MaxHeaderBytes  int
+	ShutdownTimeout time.Duration // graceful shutdown 대기 시간
+	Debug           bool
 }
 
 // 전역 상태 (실험용)
