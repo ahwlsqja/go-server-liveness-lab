@@ -108,20 +108,27 @@ func main() {
 	// Graceful shutdown 설정
 	// SIGINT, SIGTERM 수신 시 정상 종료
 	done := make(chan struct{})
+	shutdownTimeout := cfg.ShutdownTimeout // closure에서 사용할 값 캡처
 	go func() {
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 
 		sig := <-sigCh
-		log.Info().Str("signal", sig.String()).Msg("shutdown signal received")
+		log.Info().
+			Str("signal", sig.String()).
+			Dur("shutdown_timeout", shutdownTimeout).
+			Msg("shutdown signal received, waiting for in-flight requests")
 
 		// Shutdown은 새 연결 거부 + 기존 연결 완료 대기
-		// context에 타임아웃을 주면 그 시간 내에 완료 안 된 연결은 강제 종료
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		// context에 타임아웃을 주면 그 시간 내에 완료 안 된 연결은 강제로 반환
+		ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
 
+		shutdownStart := time.Now()
 		if err := server.Shutdown(ctx); err != nil {
-			log.Error().Err(err).Msg("shutdown error")
+			log.Error().Err(err).Dur("elapsed", time.Since(shutdownStart)).Msg("shutdown error (timeout?)")
+		} else {
+			log.Info().Dur("elapsed", time.Since(shutdownStart)).Msg("shutdown completed gracefully")
 		}
 		close(done)
 	}()
@@ -151,6 +158,7 @@ func parseFlags() Config {
 	flag.DurationVar(&cfg.IdleTimeout, "idle-timeout", 60*time.Second, "http.Server.IdleTimeout (0 = no timeout)")
 
 	flag.IntVar(&cfg.MaxHeaderBytes, "max-header-bytes", 1<<20, "http.Server.MaxHeaderBytes")
+	flag.DurationVar(&cfg.ShutdownTimeout, "shutdown-timeout", 30*time.Second, "graceful shutdown timeout")
 	flag.BoolVar(&cfg.Debug, "debug", false, "enable debug logging")
 
 	flag.Parse()
