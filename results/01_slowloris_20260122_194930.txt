@@ -1,0 +1,120 @@
+┌────────────────────────────────────────────────────────────┐
+│                    SLOWLORIS EXPERIMENT                    │
+└────────────────────────────────────────────────────────────┘
+
+Purpose: Verify ReadHeaderTimeout defends against Slowloris attack
+Date: Thu Jan 22 19:49:30 KST 2026
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[1m[0;36m=== Building binaries ===[0m
+
+[0;34m[2026-01-22 19:49:30][0m [0;32mINFO[0m  Building server...
+[0;34m[2026-01-22 19:49:30][0m [0;32mINFO[0m  Building slowloris...
+[0;34m[2026-01-22 19:49:31][0m [0;32mINFO[0m  Building loadgen...
+[0;34m[2026-01-22 19:49:31][0m [0;32mINFO[0m  Build complete
+
+[1m[0;36m=== Experiment A: ReadHeaderTimeout=5s (Defense ON) ===[0m
+
+Configuration:
+  - ReadHeaderTimeout: 5s
+  - Slowloris connections: 5
+  - Header delay: 2s per line
+
+Expected: Connections closed after ~5 seconds
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[0;34m[2026-01-22 19:49:31][0m [0;32mINFO[0m  Starting server on port 9090...
+[0;34m[2026-01-22 19:49:32][0m [0;32mINFO[0m  Server ready (PID: 304026)
+[0;34m[2026-01-22 19:49:32][0m [0;32mINFO[0m  Launching Slowloris attack...
+
+[90m2026-01-22T19:49:32+09:00[0m [32mINF[0m [1mcmd/slowloris/main.go:77[0m[36m >[0m [1mstarting slowloris attack simulation[0m [36mconnections=[0m5 [36mdelay=[0m2000 [36mduration=[0m10000 [36mtarget=[0mlocalhost:9090
+[90m2026-01-22T19:49:37+09:00[0m [32mINF[0m [1mcmd/slowloris/main.go:278[0m[36m >[0m [1mstats[0m [36mactive_conns=[0m5 [36mclosed_by_server=[0m0 [36merrors=[0m0 [36mheaders_sent=[0m15 [36mtotal_conns=[0m5
+[90m2026-01-22T19:49:42+09:00[0m [32mINF[0m [1mcmd/slowloris/main.go:278[0m[36m >[0m [1mstats[0m [36mactive_conns=[0m5 [36mclosed_by_server=[0m5 [36merrors=[0m0 [36mheaders_sent=[0m25 [36mtotal_conns=[0m10
+[90m2026-01-22T19:49:42+09:00[0m [32mINF[0m [1mcmd/slowloris/main.go:93[0m[36m >[0m [1mduration reached[0m [36mduration=[0m10000
+[90m2026-01-22T19:49:42+09:00[0m [32mINF[0m [1mcmd/slowloris/main.go:116[0m[36m >[0m [1mwaiting for workers to finish...[0m
+
+============================================================
+SLOWLORIS ATTACK SIMULATION RESULTS
+============================================================
+Total connections attempted: 10
+Connections closed by server: 5
+Connection errors: 0
+Total headers sent: 25
+============================================================
+
+[ANALYSIS]
+Server closed connections - likely due to ReadHeaderTimeout.
+This is GOOD server configuration for DoS protection!
+
+[0;34m[2026-01-22 19:49:42][0m [0;32mINFO[0m  Attack finished
+
+Server behavior:
+  [PASS] Server detected timeout and closed connections
+[0;34m[2026-01-22 19:49:42][0m [0;32mINFO[0m  Stopping server (PID: 304026) with SIGTERM...
+
+[1m[0;36m=== Experiment B: ReadHeaderTimeout=0 (Defense OFF) ===[0m
+
+Configuration:
+  - ReadHeaderTimeout: 0 (disabled)
+  - Slowloris connections: 5
+  - Header delay: 2s per line
+
+Expected: Connections stay open indefinitely (VULNERABLE!)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[0;34m[2026-01-22 19:49:44][0m [0;32mINFO[0m  Starting server on port 9090...
+[0;34m[2026-01-22 19:49:45][0m [0;32mINFO[0m  Server ready (PID: 304256)
+[0;34m[2026-01-22 19:49:45][0m [0;32mINFO[0m  Launching Slowloris attack (will run for 8 seconds)...
+
+[90m2026-01-22T19:49:45+09:00[0m [32mINF[0m [1mcmd/slowloris/main.go:77[0m[36m >[0m [1mstarting slowloris attack simulation[0m [36mconnections=[0m5 [36mdelay=[0m2000 [36mduration=[0m8000 [36mtarget=[0mlocalhost:9090
+[90m2026-01-22T19:49:54+09:00[0m [32mINF[0m [1mcmd/slowloris/main.go:278[0m[36m >[0m [1mstats[0m [36mactive_conns=[0m5 [36mclosed_by_server=[0m0 [36merrors=[0m0 [36mheaders_sent=[0m15 [36mtotal_conns=[0m5
+[90m2026-01-22T19:49:57+09:00[0m [32mINF[0m [1mcmd/slowloris/main.go:93[0m[36m >[0m [1mduration reached[0m [36mduration=[0m8000
+[90m2026-01-22T19:49:57+09:00[0m [32mINF[0m [1mcmd/slowloris/main.go:116[0m[36m >[0m [1mwaiting for workers to finish...[0m
+
+============================================================
+SLOWLORIS ATTACK SIMULATION RESULTS
+============================================================
+Total connections attempted: 5
+Connections closed by server: 0
+Connection errors: 0
+Total headers sent: 20
+============================================================
+
+[ANALYSIS]
+Server did NOT close slow connections!
+This server may be VULNERABLE to slowloris attacks.
+Recommendation: Set ReadHeaderTimeout in http.Server config.
+
+[0;34m[2026-01-22 19:49:57][0m [0;32mINFO[0m  Attack finished
+
+Server behavior:
+  [VULNERABLE] Without timeout, connections remain open
+  In production, this would exhaust server resources
+[0;34m[2026-01-22 19:49:57][0m [0;32mINFO[0m  Stopping server (PID: 304256) with SIGTERM...
+
+[1m[0;36m=== RESULTS SUMMARY ===[0m
+
+┌────────────────────────────────────────────────────────────────┐
+│                     SLOWLORIS EXPERIMENT                       │
+├────────────────────────────────────────────────────────────────┤
+│                                                                │
+│  Experiment A: ReadHeaderTimeout=5s                            │
+│  ─────────────────────────────────────                         │
+│  Result: Connections closed after timeout                      │
+│  Status: PROTECTED                                             │
+│                                                                │
+│  Experiment B: ReadHeaderTimeout=0                             │
+│  ─────────────────────────────────────                         │
+│  Result: Connections stay open indefinitely                    │
+│  Status: VULNERABLE                                            │
+│                                                                │
+├────────────────────────────────────────────────────────────────┤
+│                                                                │
+│  CONCLUSION:                                                   │
+│  ReadHeaderTimeout is essential for Slowloris defense.         │
+│  Recommended value: 5 seconds                                  │
+│                                                                │
+└────────────────────────────────────────────────────────────────┘
+
+[0;34m[2026-01-22 19:49:57][0m [0;32mINFO[0m  Results saved to: /home/ahwlsqja/go-http-lab/results/01_slowloris_20260122_194930.txt

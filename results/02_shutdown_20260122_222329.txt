@@ -1,0 +1,112 @@
+┌────────────────────────────────────────────────────────────┐
+│                GRACEFUL SHUTDOWN EXPERIMENT                │
+└────────────────────────────────────────────────────────────┘
+
+Purpose: Verify shutdown timeout behavior with in-flight requests
+Date: Thu Jan 22 22:23:29 KST 2026
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[1m[0;36m=== Building binaries ===[0m
+
+[0;34m[2026-01-22 22:23:29][0m [0;32mINFO[0m  Building server...
+[0;34m[2026-01-22 22:23:29][0m [0;32mINFO[0m  Building slowloris...
+[0;34m[2026-01-22 22:23:29][0m [0;32mINFO[0m  Building loadgen...
+[0;34m[2026-01-22 22:23:29][0m [0;32mINFO[0m  Build complete
+
+[1m[0;36m=== Experiment A: Shutdown Timeout=30s (Sufficient) ===[0m
+
+Configuration:
+  - Shutdown timeout: 30s
+  - Request duration: 5s (/sleep?ms=5000)
+  - SIGTERM sent: 2s after request starts
+  - Remaining time: ~3s (< 30s timeout)
+
+Expected: Request completes successfully
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[0;34m[2026-01-22 22:23:29][0m [0;32mINFO[0m  Starting server on port 9090...
+[0;34m[2026-01-22 22:23:30][0m [0;32mINFO[0m  Server ready (PID: 332749)
+[0;34m[2026-01-22 22:23:30][0m [0;32mINFO[0m  Sending 5-second request...
+[0;34m[2026-01-22 22:23:32][0m [0;32mINFO[0m  Sending SIGTERM to server...
+
+Results:
+  curl exit code: 0
+  HTTP status: 200
+  Total time: 5.001346s
+
+  [PASS] Request completed successfully during shutdown
+
+Server shutdown log:
+  2026-01-22T22:23:32+09:00 INF cmd/server/main.go:120 > shutdown signal received, waiting for in-flight requests shutdown_timeout=30000 signal=terminated
+
+[1m[0;36m=== Experiment B: Shutdown Timeout=2s (Insufficient) ===[0m
+
+Configuration:
+  - Shutdown timeout: 2s
+  - Request duration: 5s (/sleep?ms=5000)
+  - SIGTERM sent: 1s after request starts
+  - Remaining time: ~4s (> 2s timeout)
+
+Expected: Request interrupted, timeout error
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[0;34m[2026-01-22 22:23:38][0m [0;32mINFO[0m  Starting server on port 9090...
+[0;34m[2026-01-22 22:23:39][0m [0;32mINFO[0m  Server ready (PID: 332882)
+[0;34m[2026-01-22 22:23:39][0m [0;32mINFO[0m  Sending 5-second request...
+[0;34m[2026-01-22 22:23:40][0m [0;32mINFO[0m  Sending SIGTERM to server...
+
+Results:
+  curl exit code: 0
+  HTTP status: 000
+  Total time: 3.001087s
+
+  [UNEXPECTED] Request completed despite short timeout
+
+Server shutdown log:
+  2026-01-22T22:23:39+09:00 INF cmd/server/main.go:78 > starting server go_version=go1.23.4 idle_timeout=60000 port=9090 pprof_port=6060 read_header_timeout=5000 read_timeout=10000 write_timeout=60000
+  2026-01-22T22:23:40+09:00 INF cmd/server/main.go:120 > shutdown signal received, waiting for in-flight requests shutdown_timeout=2000 signal=terminated
+  2026-01-22T22:23:42+09:00 ERR cmd/server/main.go:129 > shutdown error (timeout?) error="context deadline exceeded" elapsed=2001.03726
+
+[1m[0;36m=== RESULTS SUMMARY ===[0m
+
+┌────────────────────────────────────────────────────────────────┐
+│                  GRACEFUL SHUTDOWN EXPERIMENT                  │
+├────────────────────────────────────────────────────────────────┤
+│                                                                │
+│  Experiment A: Shutdown Timeout > Request Time                 │
+│  ─────────────────────────────────────────────                 │
+│  Shutdown: 30s, Request: 5s, SIGTERM at: 2s                    │
+│  Result: Request completed successfully                        │
+│  Server: Gracefully shutdown                                   │
+│                                                                │
+│  Experiment B: Shutdown Timeout < Request Time                 │
+│  ─────────────────────────────────────────────                 │
+│  Shutdown: 2s, Request: 5s, SIGTERM at: 1s                     │
+│  Result: Request interrupted                                   │
+│  Server: context deadline exceeded                             │
+│                                                                │
+├────────────────────────────────────────────────────────────────┤
+│                                                                │
+│  TIMELINE:                                                     │
+│                                                                │
+│  Exp A (30s timeout):                                          │
+│  [Request]─────────────────[Complete]──[Shutdown]              │
+│     0s          2s            5s          5s                   │
+│              SIGTERM                                           │
+│                                                                │
+│  Exp B (2s timeout):                                           │
+│  [Request]────[Timeout!]                                       │
+│     0s    1s     3s                                            │
+│        SIGTERM   ↑                                             │
+│                  └─ Connection closed                          │
+│                                                                │
+├────────────────────────────────────────────────────────────────┤
+│                                                                │
+│  CONCLUSION:                                                   │
+│  Set shutdown timeout > max expected request duration          │
+│  Recommended: 30 seconds for typical APIs                      │
+│                                                                │
+└────────────────────────────────────────────────────────────────┘
+
+[0;34m[2026-01-22 22:23:42][0m [0;32mINFO[0m  Results saved to: /home/ahwlsqja/go-http-lab/results/02_shutdown_20260122_222329.txt
